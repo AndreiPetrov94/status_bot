@@ -5,8 +5,8 @@ import time
 from http import HTTPStatus
 from logging import StreamHandler
 
-import telegram
 import requests
+import telebot
 from telebot import TeleBot
 from dotenv import load_dotenv
 
@@ -47,10 +47,10 @@ def send_message(bot, message):
             text=message
         )
         logger.debug('Сообщение отправлено в Telegram.')
-    except telegram.error.BadRequest as error:
+    except telebot.apihelper.ApiException as error:
         message = f'Исключение {error}'
         logger.error(message)
-        raise telegram.error.BadRequest(message)
+        raise telebot.apihelper.ApiException(message)
 
 
 def get_api_answer(timestamp):
