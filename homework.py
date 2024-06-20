@@ -50,7 +50,7 @@ def send_message(bot, message):
     except ConnectionError as error:
         message = f'Исключение {error}'
         logger.error(message)
-        return False  
+        return False
 
 
 def get_api_answer(timestamp):
