@@ -6,7 +6,6 @@ from http import HTTPStatus
 from logging import StreamHandler
 
 import requests
-import telebot
 from telebot import TeleBot
 from dotenv import load_dotenv
 
@@ -47,10 +46,11 @@ def send_message(bot, message):
             text=message
         )
         logger.debug('Сообщение отправлено в Telegram.')
-    except telebot.apihelper.ApiException as error:
+        return True
+    except ConnectionError as error:
         message = f'Исключение {error}'
         logger.error(message)
-        raise telebot.apihelper.ApiException(message)
+        return False  
 
 
 def get_api_answer(timestamp):
@@ -67,7 +67,7 @@ def get_api_answer(timestamp):
         message = f'Эндопинт недоступен {error}'
         raise ConnectionError(message)
     if responce.status_code != HTTPStatus.OK:
-        raise requests.exceptions.HTTPError(
+        raise ConnectionError(
             f'Status_code: {responce.status_code}'
         )
     try:
@@ -78,13 +78,12 @@ def get_api_answer(timestamp):
 
 def check_response(response):
     """Проверка ответа API на соответствие."""
-    if isinstance(response, dict) is False:
+    if not isinstance(response, dict):
         raise TypeError('Ответ содержит ошибку типа данных: ожидается dict.')
-    key = 'homeworks'
-    homeworks = response.get(key)
+    homeworks = response.get('homeworks')
     if not homeworks:
         raise ValueError('В ответе API нет ключа: homeworks')
-    if isinstance(homeworks, list) is False:
+    if not isinstance(homeworks, list):
         raise TypeError('Ответ содержит ошибку типа данных: ожидается list.')
     return response
 
@@ -97,27 +96,18 @@ def parse_status(homework):
         homework_name = homework['homework_name']
         verdict = HOMEWORK_VERDICTS[homework['status']]
     except KeyError:
-        raise KeyError('Отсутствует key "homework_name"')
+        raise KeyError('Ошибка отсутствия значения по ключу')
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def main():
     """Основная логика работы бота."""
-    logging.basicConfig(
-        level=logging.DEBUG,
-        filename='main.log',
-        filemode='a',
-        format='%(asctime)s, %(levelname)s, %(message)s',
-        encoding='utf-8'
-    )
     if not check_tokens():
-        logging.critical(
-            'Отстутствуют токены. Работа остановлена.'
-        )
-        sys.exit('Отстутствуют токены. Работа остановлена.')
+        logger.critical('Отстутствуют токены. Работа остановлена.')
+        sys.exit('Работа бота остановлена.')
     bot = TeleBot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
-    current_timestamp = timestamp - 2629743
+    current_timestamp = timestamp - 2600000
     previous_status = ''
 
     while True:
@@ -125,27 +115,30 @@ def main():
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
             if homeworks is None:
-                logger.warning('Отсутствуют домашние задания')
+                logger.info('Отсутствуют домашние задания')
                 continue
             updated_status = parse_status(homeworks['homeworks'][0])
 
             if updated_status != previous_status:
-                if send_message(bot, updated_status):
+                if send_message(bot, updated_status) is True:
                     previous_status = updated_status
                     current_timestamp = response.get('timestamp')
             else:
                 logger.error('Ошибка отправки сообщения')
         except Exception as error:
             failure_message = f'Сбой в работе программы: {error}'
-            message = failure_message
             logging.error(failure_message)
-
-            if message == failure_message:
-                if send_message(bot, message):
-                    failure_message = message
+            send_message(bot, failure_message)
         finally:
             time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.DEBUG,
+        filename='main.log',
+        filemode='a',
+        format='%(asctime)s, %(levelname)s, %(message)s',
+        encoding='utf-8'
+    )
     main()
