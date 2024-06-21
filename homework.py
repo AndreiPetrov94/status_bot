@@ -73,30 +73,30 @@ def get_api_answer(timestamp):
     try:
         return responce.json()
     except ValueError:
-        raise ValueError('Ошибка формирования JSON')
+        raise ValueError('Ошибка обработки запроса')
 
 
 def check_response(response):
     """Проверка ответа API на соответствие."""
     if not isinstance(response, dict):
-        raise TypeError('Ответ содержит ошибку типа данных: ожидается dict.')
+        raise TypeError('Ошибка обработки ответа')
     homeworks = response.get('homeworks')
     if not homeworks:
-        raise ValueError('В ответе API нет ключа: homeworks')
+        raise ValueError('Отсутствуют домашние задания')
     if not isinstance(homeworks, list):
-        raise TypeError('Ответ содержит ошибку типа данных: ожидается list.')
+        raise TypeError('Ошибка обработки ответа')
     return response
 
 
 def parse_status(homework):
     """Получение конкретного статуса домашней работы."""
-    if isinstance(homework, dict) is False:
-        raise TypeError('Ошибка типа данных: ожидается dict.')
+    if not isinstance(homework, dict):
+        raise TypeError('')
     try:
         homework_name = homework['homework_name']
         verdict = HOMEWORK_VERDICTS[homework['status']]
     except KeyError:
-        raise KeyError('Ошибка отсутствия значения по ключу')
+        raise ValueError('Ошибка отсутствия значения статуса домашней работы')
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -114,21 +114,20 @@ def main():
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
-            if homeworks is None:
-                logger.info('Отсутствуют домашние задания')
-                continue
-            updated_status = parse_status(homeworks['homeworks'][0])
-
-            if updated_status != previous_status:
-                if send_message(bot, updated_status) is True:
-                    previous_status = updated_status
-                    current_timestamp = response.get('timestamp')
+            if homeworks is not []:
+                updated_status = parse_status(homeworks['homeworks'][0])
+                if updated_status != previous_status:
+                    if send_message(bot, updated_status):
+                        previous_status = updated_status
+                        current_timestamp = response.get('timestamp')
             else:
                 logger.error('Ошибка отправки сообщения')
         except Exception as error:
             failure_message = f'Сбой в работе программы: {error}'
             logging.error(failure_message)
-            send_message(bot, failure_message)
+            if failure_message != previous_status:
+                send_message(bot, failure_message)
+                previous_status = failure_message
         finally:
             time.sleep(RETRY_PERIOD)
 
