@@ -91,9 +91,12 @@ def check_response(response):
 def parse_status(homework):
     """Получение конкретного статуса домашней работы."""
     if not isinstance(homework, dict):
-        raise TypeError('')
+        raise TypeError('Ошибка обработки ответа')
     try:
         homework_name = homework['homework_name']
+    except KeyError:
+        raise ValueError('Ошибка отсутствия названия домашней работы')
+    try:
         verdict = HOMEWORK_VERDICTS[homework['status']]
     except KeyError:
         raise ValueError('Ошибка отсутствия значения статуса домашней работы')
@@ -108,26 +111,26 @@ def main():
     bot = TeleBot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
     current_timestamp = timestamp - 2600000
-    previous_status = ''
+    message_telegram = ''
 
     while True:
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
-            if homeworks is not []:
+            if homeworks:
                 updated_status = parse_status(homeworks['homeworks'][0])
-                if updated_status != previous_status:
+                if updated_status != message_telegram:
                     if send_message(bot, updated_status):
-                        previous_status = updated_status
+                        message_telegram = updated_status
                         current_timestamp = response.get('timestamp')
             else:
                 logger.error('Ошибка отправки сообщения')
         except Exception as error:
             failure_message = f'Сбой в работе программы: {error}'
             logging.error(failure_message)
-            if failure_message != previous_status:
+            if failure_message != message_telegram:
                 send_message(bot, failure_message)
-                previous_status = failure_message
+                message_telegram = failure_message
         finally:
             time.sleep(RETRY_PERIOD)
 
